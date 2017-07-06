@@ -27,3 +27,112 @@ javascript没有类，只是语法糖，来努力满足用类进行设计的极�
 
 ## 混合
 在JavaScript中没有“类”可以拿来实例化，只有对象。而且对象也不会被拷贝到另一个对象中，而是被 链接在一起
+
+#### 明确的Mixin
+```
+// 大幅简化的`mixin(..)`示例：
+function mixin( sourceObj, targetObj ) {
+	for (var key in sourceObj) {
+		// 仅拷贝非既存内容
+		if (!(key in targetObj)) {
+			targetObj[key] = sourceObj[key];
+		}
+	}
+
+	return targetObj;
+}
+
+var Vehicle = {
+	engines: 1,
+
+	ignition: function() {
+		console.log( "Turning on my engine." );
+	},
+
+	drive: function() {
+		this.ignition();
+		console.log( "Steering and moving forward!" );
+	}
+};
+
+var Car = mixin( Vehicle, {
+	wheels: 4,
+
+	drive: function() {
+		Vehicle.drive.call( this );
+		console.log( "Rolling on all " + this.wheels + " wheels!" );
+	}
+} );
+```
+
+但是由于JavaScript的特殊性，显式假想多态（因为遮蔽！） 在每一个你需要这种（假想）多态引用的函数中 建立了一种脆弱的手动/显式链接。这可能会显著地增加维护成本。而且，虽然显式假想多态可以模拟“多重继承”的行为，但这只会增加复杂性和代码脆弱性。
+
+#### 寄生继承
+```
+// “传统的JS类” `Vehicle`
+function Vehicle() {
+	this.engines = 1;
+}
+Vehicle.prototype.ignition = function() {
+	console.log( "Turning on my engine." );
+};
+Vehicle.prototype.drive = function() {
+	this.ignition();
+	console.log( "Steering and moving forward!" );
+};
+
+// “寄生类” `Car`
+function Car() {
+	// 首先, `car`是一个`Vehicle`
+	var car = new Vehicle();
+
+	// 现在, 我们修改`car`使它特化
+	car.wheels = 4;
+
+	// 保存一个`Vehicle::drive()`的引用
+	var vehDrive = car.drive;
+
+	// 覆盖 `Vehicle::drive()`
+	car.drive = function() {
+		vehDrive.call( this );
+		console.log( "Rolling on all " + this.wheels + " wheels!" );
+	};
+
+	return car;
+}
+
+var myCar = new Car();
+
+myCar.drive();
+```
+
+#### 隐含的 Mixin
+```
+var Something = {
+	cool: function() {
+		this.greeting = "Hello World";
+		this.count = this.count ? this.count + 1 : 1;
+	}
+};
+
+Something.cool();
+Something.greeting; // "Hello World"
+Something.count; // 1
+
+var Another = {
+	cool: function() {
+		// 隐式地将`Something`混入`Another`
+		Something.cool.call( this );
+	}
+};
+
+Another.cool();
+Another.greeting; // "Hello World"
+Another.count; // 1 (不会和`Something`共享状态)
+```
+
+## 总结
+JavaScript 不会自动地 （像类那样）在对象间创建拷贝。
+mixin模式常用于在 某种程度上 模拟类的拷贝行为，但是这通常导致像显式假想多态那样(OtherObj.methodName.call(this, ...))难看而且脆弱的语法，这样的语法又常导致更难懂和更难维护的代码。
+明确的mixin和类 拷贝 又不完全相同，因为对象（和函数！）仅仅是共享的引用被复制，不是对象/函数自身被复制。不注意这样的微小之处通常是各种陷阱的根源。
+一般来讲，在JS中模拟类通常会比解决当前 真正 的问题埋下更多的坑。
